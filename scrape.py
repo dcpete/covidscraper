@@ -3,6 +3,21 @@ from pymongo import MongoClient
 import requests
 import settings
 
+urlList = [
+    "https://jacksonhealth.org/jackson-memorial/",
+    "https://www.mayoclinichealthsystem.org/",
+    "https://www.hennepinhealthcare.org/",
+    "https://www.mgmc.org/",
+    "https://www.nyp.org/"
+]
+# targetWords is a list of lists, each sublist containing words to scrape
+# lists containing more than one word are searches using OR
+targetWords = [["facebook"],["twitter"],["covid", "coronavirus"]]
+# ignoreWords is a list of lists, one for each list of lists in targetWords
+# urls matched by targetWords are ignored if they contain any in ignoreWords
+ignoreWords = [[], ["/intent/", "/status/"], ["donate","donation","give","join"]]
+
+
 def initDatabase():
     # initialize or establish connection to database
     mongo_uri = 'mongodb://{}:{}'.format(settings.MONGO_HOST, settings.MONGO_PORT)
@@ -13,12 +28,6 @@ def initDatabase():
 def searchUrl(url):
     # do a search on one url
     request = requests.get(url)
-    # targetWords is a list of lists, each sublist containing words to scrape
-    # lists containing more than one word are searches using OR
-    targetWords = [["facebook"],["twitter"],["covid", "coronavirus"]]
-    # ignoreWords is a list of lists, one for each list of lists in targetWords
-    # urls matched by targetWords are ignored if they contain any in ignoreWords
-    ignoreWords = [[], ["/intent/", "/status/"], ["donate","donation","give","join"]]
     # entry is a dict for this url that will eventually be added to mongodb
     # start by adding the search url
     entry = { 'url': url }
@@ -62,21 +71,45 @@ def scrape(request, target, ignore):
     noDups = list(set(links))
     return noDups
 
+
 def writeToConsole(entry):
     print(entry)
+
 
 def writeToMongo(db, entry):
     db.hospitals.insert_one(entry)
 
 
+def writeToFile(entries):
+    with open("output.csv", "w") as f:
+        targetHeaders = []
+        for wordList in targetWords:
+            targetHeaders.append(wordList[0])
+        headers = ",".join(targetHeaders) + "\n"
+        f.write('url,')
+        f.write(headers)
+        for entry in entries:
+            f.write(entry.get('url') + ",")
+            rowList = []
+            for header in targetHeaders:
+                urlList = entry.get(header).copy()
+                joinedList = "|".join(urlList)
+                rowList.append(joinedList)
+            row = ",".join(rowList) + "\n"
+            f.write(row)
+
+
 def main():
     # program starts here
     db = initDatabase()
-    urlList = ["https://jacksonhealth.org/jackson-memorial/","https://www.mayoclinichealthsystem.org/","https://www.hennepinhealthcare.org/","https://www.mgmc.org/","https://www.nyp.org/"]
+    entries = []
     for url in urlList:
         entry = searchUrl(url)
         #writeToConsole(entry)
+        entries.append(entry)
         writeToMongo(db, entry)
+    writeToFile(entries)
+
         
 
 if __name__ == "__main__":
