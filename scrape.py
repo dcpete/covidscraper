@@ -1,16 +1,22 @@
 from lxml import html
+from pymongo import MongoClient
 import requests
+import settings
+
+def initDatabase():
+    mongo_uri = 'mongodb://{}:{}'.format(settings.MONGO_HOST, settings.MONGO_PORT)
+    client = MongoClient(mongo_uri)
+    return client[settings.MONGO_DB]
+
 
 def searchUrl(url):
     request = requests.get(url)
     targetWords = [["facebook"],["twitter"],["covid", "coronavirus"]]
     ignoreWords = [[], ["/intent/", "/status/"], ["donate","donation","give","join"]]
-    #ignoreWords = [[], ["/intent/", "/status/"], []]
-    entry = ""
-    entry += "{}".format(url)
+    entry = { 'url': url }
     for target, ignore in zip(targetWords, ignoreWords):
-        entry += ",{}".format(scrape(request, target, ignore))
-    print(entry)
+        entry[target[0]] = scrape(request, target, ignore)
+    return entry
 
 
 def scrape(request, target, ignore):
@@ -34,16 +40,22 @@ def scrape(request, target, ignore):
             noRelative.append(linkText.strip())
         entries.extend(noRelative)
     noDups = list(set(entries))
-    ret = "|".join(noDups)
-    if not ret:
-        ret += "(no {})".format(target[0])
-    return ret
+    return noDups
+
+def writeToConsole(entry):
+    print(entry)
+
+def writeToMongo(db, entry):
+    db.hospitals.insert_one(entry)
 
 def main():
+    db = initDatabase()
     urlList = ["https://jacksonhealth.org/jackson-memorial/","https://www.mayoclinichealthsystem.org/","https://www.hennepinhealthcare.org/","https://www.mgmc.org/","https://www.nyp.org/"]
-    #urlList = ["https://www.mayoclinichealthsystem.org/"]
     for url in urlList:
-        searchUrl(url)
+        entry = searchUrl(url)
+        #writeToConsole(entry)
+        writeToMongo(db, entry)
+        
 
 if __name__ == "__main__":
     main()
