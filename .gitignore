@@ -7,3 +7,9 @@
 
 ### Virtualenv ###
 .venv
+
+### python-dotenv ###
+.env
+
+### python ###
+__pycache__
